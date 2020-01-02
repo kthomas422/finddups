@@ -16,6 +16,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sync"
 )
 
 func finddups(dir string, dups *[]*Dup) {
@@ -37,8 +38,18 @@ func finddups(dir string, dups *[]*Dup) {
 		log.Fatal("Error: ", "[", dir, "]", " is not a directory.")
 	}
 
-	// read dir and add all filenames found into list  (this isn't the most efficient way but it works)
-	listOfFiles = readFiles(dir)
+	// get list of files from directory and sub directories
+	filesChan := make(chan FileStat, 2048)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go readFiles(dir, filesChan, &wg)
+	go func() {
+		wg.Wait()
+		close(filesChan)
+	}()
+	for file := range filesChan {
+		listOfFiles = append(listOfFiles, file)
+	}
 	if len(listOfFiles) == 0 {
 		log.Fatal("Error: no files found.")
 	}
@@ -64,7 +75,8 @@ func finddups(dir string, dups *[]*Dup) {
 	}
 }
 
-func readFiles(rootDir string) (returnFiles []FileStat) {
+func readFiles(rootDir string, filesChan chan<- FileStat, wg *sync.WaitGroup) {
+	defer wg.Done()
 	var fileStat *FileStat
 	nc0 := 0
 	if rootDir[len(rootDir)-1] != '/' {
@@ -76,14 +88,15 @@ func readFiles(rootDir string) (returnFiles []FileStat) {
 	}
 	for _, file := range filesList {
 		if file.IsDir() {
-			returnFiles = append(returnFiles, readFiles(rootDir+file.Name())...)
+			wg.Add(1)
+			go readFiles(rootDir+file.Name(), filesChan, wg)
 		} else {
 			nc0++
 			fileStat = new(FileStat)
 			fileStat.Name = rootDir + file.Name()
 			fileStat.Size = int(file.Size())
-			returnFiles = append(returnFiles, *fileStat)
+			filesChan <- *fileStat
 		}
 	}
-	return returnFiles
+	return
 }
