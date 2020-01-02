@@ -39,13 +39,17 @@ func finddups(dir string, dups *[]*Dup) {
 	}
 
 	// get list of files from directory and sub directories
-	filesChan := make(chan FileStat, 2048)
-	var wg sync.WaitGroup
+	var (
+		wg        sync.WaitGroup
+		filesChan = make(chan FileStat)
+		tokens    = make(chan struct{}, 20)
+	)
 	wg.Add(1)
-	go readFiles(dir, filesChan, &wg)
+	go readFiles(dir, filesChan, tokens, &wg)
 	go func() {
 		wg.Wait()
 		close(filesChan)
+		close(tokens)
 	}()
 	for file := range filesChan {
 		listOfFiles = append(listOfFiles, file)
@@ -75,21 +79,23 @@ func finddups(dir string, dups *[]*Dup) {
 	}
 }
 
-func readFiles(rootDir string, filesChan chan<- FileStat, wg *sync.WaitGroup) {
+func readFiles(rootDir string, filesChan chan<- FileStat, tokens chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var fileStat *FileStat
 	nc0 := 0
 	if rootDir[len(rootDir)-1] != '/' {
 		rootDir += "/"
 	}
+	tokens <- struct{}{}
 	filesList, err := ioutil.ReadDir(rootDir)
+	<-tokens
 	if err != nil {
 		log.Println(err)
 	}
 	for _, file := range filesList {
 		if file.IsDir() {
 			wg.Add(1)
-			go readFiles(rootDir+file.Name(), filesChan, wg)
+			go readFiles(rootDir+file.Name(), filesChan, tokens, wg)
 		} else {
 			nc0++
 			fileStat = new(FileStat)
