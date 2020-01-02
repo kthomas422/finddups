@@ -18,14 +18,19 @@ import (
 )
 
 type Dup struct {
-	size   int
-	fnames []string
+	Size   int
+	Fnames []string
 }
 
-func writeDups(dups *[]Dup) {
+type FileStat struct {
+	Size int
+	Name string
+}
+
+func writeDups(dups *[]*Dup) {
 	var (
-		err error
-		i   int
+		err      error
+		i, total int
 	)
 	f, err := os.Create("dups.txt")
 	if err != nil {
@@ -33,12 +38,13 @@ func writeDups(dups *[]Dup) {
 	}
 	defer f.Close()
 	for _, cat := range *dups {
-		if len(cat.fnames) > 1 { // only print out categories with more than 1 filename (cause dups, duh!)
-			for j, dup := range cat.fnames {
+		if len(cat.Fnames) > 1 { // only print out categories with more than 1 filename
+			for j, dup := range cat.Fnames {
 				fmt.Fprintf(f, "[%d.%d]\t%s\n", i+1, j+1, dup)
 				if err != nil {
 					log.Println(err)
 				}
+				total++
 			}
 			i++
 		}
@@ -48,6 +54,7 @@ func writeDups(dups *[]Dup) {
 	if err != nil {
 		log.Println(err)
 	}
+	fmt.Println(total, "Duplicates found from", i, "categories.")
 }
 
 func usage() {
@@ -59,7 +66,14 @@ func usage() {
 }
 
 func main() {
-	var dups []Dup
+	var (
+		dups []*Dup
+		cwd  string
+	)
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatal("Error: cannot get cwd. ", err)
+	}
 	if len(os.Args) > 2 {
 		log.Fatal("Error: too many arguments passed in.")
 		usage()
@@ -70,13 +84,16 @@ func main() {
 			usage()
 			os.Exit(0)
 		}
-		travDir(os.Args[1], &dups)
-	} else {
-		cwd, err := os.Getwd()
-		if err != nil {
-			log.Fatal(err)
+		if os.Args[1][len(os.Args[1])-1] != '/' {
+			os.Args[1] += "/"
 		}
-		travDir(cwd, &dups)
+		if os.Args[1][0] == '/' { // absolute path
+			finddups(os.Args[1], &dups)
+		} else { // relative path
+			finddups(cwd+"/"+os.Args[1], &dups)
+		}
+	} else {
+		finddups(cwd+"/", &dups)
 	}
 	writeDups(&dups)
 	os.Exit(0)

@@ -20,14 +20,10 @@ type compareFilesPairs struct {
 
 var (
 	compareFilesTest = [...]compareFilesPairs{
-		{"tests/t1.txt", "tests/t2.txt", true},
-		{"tests/t1.txt", "tests/t3.txt", false},
-		{"tests/t4.jpg", "tests/t5.jpg", true},
-		{"tests/t4.jpg", "tests/t6.jpg", false},
-		{"tests/t1.txt", "tests/t7.txt", false},
-		{"tests/t7.txt", "tests/t1.txt", false},
-		{"tests/t8", "tests/t9", true},
-		{"tests/t8", "tests/t10", false},
+		{"Tests/t1.txt", "Tests/t2.txt", true},
+		{"Tests/t1.txt", "Tests/t3.txt", false},
+		{"Tests/t1.txt", "Tests/t4.txt", false},
+		{"Tests/t4.txt", "Tests/t1.txt", false},
 	}
 )
 
