@@ -7,6 +7,8 @@
  *
  * Author:          Kyle Thomas
  * Date Started:    December 2019
+ *
+ * Note: absolute paths probably won't work in windows
  */
 
 package main
@@ -15,7 +17,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 )
+
+var pathDel string // "/" for linux "\\" for windows
 
 type Dup struct {
 	Size   int
@@ -27,7 +32,7 @@ type FileStat struct {
 	Name string
 }
 
-func writeDups(dups *[]*Dup) {
+func writeDups(dups *[]*Dup, flag bool) {
 	var (
 		err      error
 		i, total int
@@ -40,7 +45,13 @@ func writeDups(dups *[]*Dup) {
 	for _, cat := range *dups {
 		if len(cat.Fnames) > 1 { // only print out categories with more than 1 filename
 			for j, dup := range cat.Fnames {
-				fmt.Fprintf(f, "[%d.%d]\t%s\n", i+1, j+1, dup)
+				fmt.Fprintf(f, "[%d.%d]", i+1, j+1)
+				if flag && j > 0 {
+					fmt.Fprintf(f, "X")
+				} else {
+					fmt.Fprintf(f, " ")
+				}
+				fmt.Fprintf(f, "\t%s\n", dup)
 				if err != nil {
 					log.Println(err)
 				}
@@ -57,9 +68,23 @@ func writeDups(dups *[]*Dup) {
 	fmt.Println(total, "Duplicates found from", i, "categories.")
 }
 
+func deleteDups(dups *[]*Dup) {
+	for _, cat := range *dups {
+		if len(cat.Fnames) > 1 {
+			for j := 1; j < len(cat.Fnames); j++ { // start at index 1 to keep one of the duplicates
+				err := os.Remove(cat.Fnames[j])
+				if err != nil {
+					log.Print(err)
+				}
+			}
+		}
+	}
+}
+
 func usage() {
-	fmt.Println("$ finddups [-h or directory]")
+	fmt.Println("$ finddups [flags] [directories...]")
 	fmt.Println("-h flag will print this help menu")
+	fmt.Println("-D flag will delete the duplicates")
 	fmt.Println("\nanything else is assumed to be a directory, if no directory",
 		"is passed then current directory is assumed.")
 	fmt.Println()
@@ -69,32 +94,49 @@ func main() {
 	var (
 		dups []*Dup
 		cwd  string
+		del  = false
 	)
 	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatal("Error: cannot get cwd. ", err)
 	}
-	if len(os.Args) > 2 {
-		log.Fatal("Error: too many arguments passed in.")
-		usage()
-		os.Exit(1)
-	}
-	if len(os.Args) == 2 {
-		if os.Args[1] == "-h" {
-			usage()
-			os.Exit(0)
-		}
-		if os.Args[1][len(os.Args[1])-1] != '/' {
-			os.Args[1] += "/"
-		}
-		if os.Args[1][0] == '/' { // absolute path
-			finddups(os.Args[1], &dups)
-		} else { // relative path
-			finddups(cwd+"/"+os.Args[1], &dups)
-		}
+	if runtime.GOOS == "windows" {
+		pathDel = "\\"
 	} else {
-		finddups(cwd+"/", &dups)
+		pathDel = "/"
 	}
-	writeDups(&dups)
+
+	if len(os.Args) == 1 { // no args, do current dir
+		finddups(cwd+pathDel, &dups)
+	} else {
+		for i, arg := range os.Args {
+			if i == 0 {
+				continue
+			}
+			if i > 3 {
+				log.Println("Error: too many arguments provided")
+				usage()
+				os.Exit(1)
+			}
+			if arg == "-h" {
+				usage()
+				os.Exit(0)
+			} else if arg == "-D" {
+				del = true
+			} else {
+				if arg[0] == pathDel[0] { // absolute path
+					finddups(arg, &dups)
+				} else {
+					finddups(cwd+pathDel+arg, &dups)
+				}
+			}
+		}
+	}
+
+	writeDups(&dups, del)
+	if del {
+		fmt.Println("Deleting duplicates...")
+		deleteDups(&dups)
+	}
 	os.Exit(0)
 }
