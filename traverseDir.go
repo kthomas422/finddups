@@ -82,7 +82,6 @@ func finddups(dir string, dups *[]*Dup) {
 func readFiles(rootDir string, filesChan chan<- FileStat, tokens chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var fileStat *FileStat
-	nc0 := 0
 	if rootDir[len(rootDir)-1] != '/' {
 		rootDir += "/"
 	}
@@ -96,8 +95,7 @@ func readFiles(rootDir string, filesChan chan<- FileStat, tokens chan struct{}, 
 		if file.IsDir() {
 			wg.Add(1)
 			go readFiles(rootDir+file.Name(), filesChan, tokens, wg)
-		} else {
-			nc0++
+		} else if file.Mode().IsRegular() && file.Size() > 0 {
 			fileStat = new(FileStat)
 			fileStat.Name = rootDir + file.Name()
 			fileStat.Size = int(file.Size())
